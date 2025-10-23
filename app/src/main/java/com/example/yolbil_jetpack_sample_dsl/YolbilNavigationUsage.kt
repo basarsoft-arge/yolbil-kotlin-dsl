@@ -82,6 +82,18 @@ class YolbilNavigationUsage {
             start?.let { locationSource.sendMockLocation(it) }
 
             mapView.fitRouteOnMap(navRes.points)
+            try {
+                val size = navRes.points.size()
+                Log.d("NAVIGATION_POINTS", "Toplam Nokta: $size")
+
+                for (i in 0 until size) {
+                    val pos = navRes.points.get(i.toInt())
+                    Log.d("NAVIGASYON NOKTALARI", "Nokta $i -> Lon: ${pos.x}, Lat: ${pos.y}")
+                }
+
+            } catch (e: Exception) {
+                Log.e("NAVIGATION_POINTS", "Rota noktaları loglanırken hata: ${e.localizedMessage}")
+            }
             return navRes
         } else {
             Log.e(TAG, "Navigation bundle is null")
