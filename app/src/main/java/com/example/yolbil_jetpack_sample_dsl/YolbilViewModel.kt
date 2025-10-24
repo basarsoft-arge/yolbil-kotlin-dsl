@@ -20,6 +20,8 @@ import com.basarsoft.yolbil.location.Location
 import com.basarsoft.yolbil.location.LocationListener
 import com.basarsoft.yolbil.projections.EPSG4326
 import com.basarsoft.yolbil.styles.CompiledStyleSet
+import com.basarsoft.yolbil.ui.MapEventListener
+import com.basarsoft.yolbil.ui.MapInteractionInfo
 import com.basarsoft.yolbil.ui.MapView
 import com.basarsoft.yolbil.utils.AssetUtils
 import com.basarsoft.yolbil.utils.ZippedAssetPackage
@@ -109,10 +111,11 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
         })
     }
 
+
     /** Navigasyonu başlatır: önce rota kur, sonra beginNavigation */
     fun startNavigation() {
         createRoute()
-        mapView?.isDeviceOrientationFocused = true
+        mapView?.isDeviceOrientationFocused = false
         navigationUsage.startNavigation()
     }
 
@@ -145,19 +148,15 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
     /** Google raster katmanını gösterir, BMS vector’ü kaldırır. */
     fun showGoogleRaster() {
         val mv = mapView ?: return
-
-        // BMS vector varsa kaldır
-        bmsVectorLayer?.let { layer ->
-            runCatching { mv.layers.remove(layer) }
+        bmsVectorLayer?.let { mv.layers.remove(it) }
+        googleRasterLayer?.let {
+            mv.layers.remove(it)
+            mv.layers.insert(0, it) // altlığı en alta koy
         }
-
-        // Google raster’ı ekli değilse ekle
-        googleRasterLayer?.let { layer ->
-            mv.layers.remove(layer)
-            mv.layers.add(layer)
-
-        }
+        bringRouteLayersToTop(mv, navigationUsage.routeLayers())
     }
+
+
 
     /** BMS vector tile katmanını gösterir, Google raster’ı kaldırır. */
     fun showBmsVector(context: Context) {
@@ -209,13 +208,26 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
                 showGoogleRaster()
                 return
             }
+
         }
 
         // BMS layer’ı ekle (ekli değilse)
         bmsVectorLayer?.let { layer ->
             mv.layers.remove(layer)
             mv.layers.add(layer)
+            bringRouteLayersToTop(mv, navigationUsage.routeLayers())
 
         }
+    }
+}
+
+
+private fun bringRouteLayersToTop(mv: MapView, lv: com.basarsoft.yolbil.layers.LayerVector?) {
+    if (lv == null) return
+    val n = lv.size().toInt()
+    for (i in 0 until n) {
+        val l = lv.get(i)
+        mv.layers.remove(l)
+        mv.layers.add(l) // en üste
     }
 }

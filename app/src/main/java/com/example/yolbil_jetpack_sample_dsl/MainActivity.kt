@@ -15,12 +15,42 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.basarsoft.yolbil.ui.MapView
 import com.example.yolbil_jetpack_sample_dsl.ui.theme.YolbiljetpacksampleTheme
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
 
 class MainActivity : ComponentActivity() {
+
+    private val locationPermissionLauncher = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestMultiplePermissions()
+    ) { permissions ->
+        val fine = permissions[android.Manifest.permission.ACCESS_FINE_LOCATION] ?: false
+        val coarse = permissions[android.Manifest.permission.ACCESS_COARSE_LOCATION] ?: false
+
+        if (fine || coarse) {
+            setContentForMap()
+        } else {
+            setContent { PermissionDeniedScreen() }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
+
+        // İlk kontrol
+        if (isLocationPermissionGranted()) {
+            setContentForMap()
+        } else {
+            // İzin yok → iste
+            locationPermissionLauncher.launch(
+                arrayOf(
+                    android.Manifest.permission.ACCESS_FINE_LOCATION,
+                    android.Manifest.permission.ACCESS_COARSE_LOCATION
+                )
+            )
+        }
+    }
+
+    private fun setContentForMap() {
         setContent {
             YolbiljetpacksampleTheme {
                 Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
@@ -31,7 +61,14 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    private fun isLocationPermissionGranted(): Boolean {
+        val fine = checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        val coarse = checkSelfPermission(android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+        return fine || coarse
+    }
 }
+
 
 @Composable
 fun YolbilMapScreen(
@@ -93,6 +130,17 @@ fun YolbilMapScreen(
         }
     }
 }
+
+@Composable
+fun PermissionDeniedScreen() {
+    Box(
+        Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        Text("Konum izni olmadan harita açılamaz.")
+    }
+}
+
 
 @Preview(showBackground = true)
 @Composable

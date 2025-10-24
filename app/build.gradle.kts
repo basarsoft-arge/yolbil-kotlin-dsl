@@ -66,7 +66,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     implementation("us.inavi.libs:licensemanager:4.0.7")
     implementation("us.inavi.libs:sensormanager:4.0.7")
-    implementation("com.basarsoft.yolbil:yolbil-mobile-sdk:0.2.93")
+    implementation("com.basarsoft.yolbil:yolbil-mobile-sdk:0.0.96")
     implementation("com.google.dagger:hilt-android:2.48")
     implementation("androidx.hilt:hilt-navigation-compose:1.0.0")
 

@@ -29,6 +29,9 @@ class YolbilNavigationUsage {
     private var navigationResult: NavigationResult? = null
     private var blueDotVectorLayer: VectorLayer? = null
 
+    private var blueDotDataSource: BlueDotDataSource? = null
+
+
     @SuppressLint("MissingPermission")
     fun fullExample(
         mapView: MapView,
@@ -50,9 +53,7 @@ class YolbilNavigationUsage {
         })
 
         // Doğru kaynakla snap proxy oluştur
-        snapLocationSourceProxy = LocationSourceSnapProxy(locationSource).apply {
-            setMaxSnapDistanceMeter(500.0)
-        }
+
 
         lastLocation = Location().apply { coordinate = start }
 
@@ -63,8 +64,7 @@ class YolbilNavigationUsage {
         val localBundle = bundle
         if (localBundle != null) {
             // >>> KRİTİK DÜZELTME: navigationResult ataması <<<
-            navigationResult = localBundle.startNavigation(start, end)
-
+            navigationResult = bundle!!.startNavigation(start,end).get(0);
 
             // navigationResult artık null değil
             val navRes = navigationResult!!
@@ -102,16 +102,35 @@ class YolbilNavigationUsage {
     }
 
     fun addLocationSourceToMap(mapView: MapView) {
-        // BlueDot için non-null kaynak ver
-        val src = snapLocationSourceProxy?.locationSource ?: locationSource
-        if (src == null) {
-            Log.e(TAG, "LocationSource is null; BlueDot cannot be added")
-            return
+        if (blueDotDataSource == null) {
+            blueDotDataSource = BlueDotDataSource(EPSG4326(), locationSource).also { it.init() }
         }
-        val blueDotDataSource = BlueDotDataSource(EPSG4326(), src)
-        val layer = VectorLayer(blueDotDataSource)
-        mapView.layers.add(layer)
-        blueDotVectorLayer = layer
+        if (blueDotVectorLayer == null) {
+            blueDotVectorLayer = VectorLayer(blueDotDataSource)
+        }
+
+        // --- tekrar eklemeyi engelle ---
+        var exists = false
+        val layerCount = mapView.layers.count()
+        for (i in 0 until layerCount) {
+            if (mapView.layers.get(i) === blueDotVectorLayer) {
+                exists = true
+                break
+            }
+        }
+        if (!exists) {
+            mapView.layers.add(blueDotVectorLayer)
+            Log.d("BlueDot", "BlueDot layer eklendi")
+        } else {
+            Log.d("BlueDot", "BlueDot layer zaten var, eklenmedi")
+        }
+
+        if (snapLocationSourceProxy == null) {
+            snapLocationSourceProxy = LocationSourceSnapProxy(blueDotDataSource).also {
+                it.setMaxSnapDistanceMeter(500.0)
+                it.init()
+            }
+        }
     }
 
     fun updateLocation(mapPos: MapPos?) {
@@ -139,7 +158,7 @@ class YolbilNavigationUsage {
             accountId,
             appCode,
             // Mümkünse snap’li kaynak, yoksa GPS
-            snapLocationSourceProxy?.locationSource ?: locationSource
+            snapLocationSourceProxy!!.getBlueDotDataSource().getLocationSource()
         )
 
         navigationBundleBuilder.setBlueDotDataSourceEnabled(true)
@@ -158,12 +177,14 @@ class YolbilNavigationUsage {
 
             override fun onNavigationRecalculated(navigationResult: NavigationResult): Boolean {
                 Log.e(TAG, "onNavigationRecalculated: $navigationResult")
+                mapView!!.isDeviceOrientationFocused = false
                 return super.onNavigationRecalculated(navigationResult)
             }
         })
 
         return navigationBundleBuilder.build()
     }
+
 
     fun addNavigationToMapLayers(mapView: MapView) {
         bundle?.layers?.let { mapView.layers.addAll(it) }
@@ -181,16 +202,24 @@ class YolbilNavigationUsage {
         }
 
         bundle?.beginNavigation(nav)
-        mv.setDeviceOrientationFocused(true)
+        mv.setDeviceOrientationFocused(false)
         lastLocation?.coordinate?.let { mv.setFocusPos(it, 1.0f) }
         mv.setZoom(17f, 1.0f)
 
         locationSource?.addListener(object : LocationListener() {
             override fun onLocationChange(location: Location) {
-                mv.setDeviceOrientationFocused(true)
-                mv.setZoom(17f, 1.0f)
-                mv.setFocusPos(location.coordinate, 1f)
+                mv.setDeviceOrientationFocused(false)
+
+                if (mv.isDeviceOrientationFocused){
+                    mv.setZoom(17f, 1.0f)
+                    mv.setFocusPos(location.coordinate, 1f)
+                }
+
             }
         })
     }
+
+    fun routeLayers(): com.basarsoft.yolbil.layers.LayerVector? = bundle?.layers
+
+
 }
