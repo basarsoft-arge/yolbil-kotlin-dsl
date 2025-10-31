@@ -3,10 +3,11 @@ package com.example.yolbil_jetpack_sample_dsl
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -14,9 +15,11 @@ import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.basarsoft.yolbil.ui.MapView
 import com.example.yolbil_jetpack_sample_dsl.ui.theme.YolbiljetpacksampleTheme
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import androidx.compose.ui.graphics.Color
 
 class MainActivity : ComponentActivity() {
 
@@ -118,6 +121,14 @@ fun YolbilMapScreen(
                 }
             }
 
+            viewModel.navigationInfo?.let { info ->
+                NavigationInfoPanel(
+                    remainingTime = info.remainingTime,
+                    remainingDistance = info.remainingDistance,
+                    eta = info.eta
+                )
+            }
+
             // Navigasyon başlat
             Button(
                 onClick = { viewModel.startNavigation() },
@@ -128,6 +139,42 @@ fun YolbilMapScreen(
                 Text(text = "Start Navigation")
             }
         }
+    }
+}
+
+@Composable
+fun NavigationInfoPanel(
+    remainingTime: String,
+    remainingDistance: String,
+    eta: String
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .background(Color(0xFF1E3A56), RoundedCornerShape(16.dp))
+            .padding(horizontal = 20.dp, vertical = 16.dp)
+    ) {
+        Text(
+            text = "Kalan Süre: $remainingTime",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Kalan Mesafe: $remainingDistance",
+            color = Color.White,
+            fontSize = 18.sp,
+            fontWeight = FontWeight.Medium
+        )
+        Spacer(modifier = Modifier.height(6.dp))
+        Text(
+            text = "Varış Saati: $eta",
+            color = Color.White,
+            fontSize = 16.sp,
+            fontWeight = FontWeight.Normal
+        )
     }
 }
 

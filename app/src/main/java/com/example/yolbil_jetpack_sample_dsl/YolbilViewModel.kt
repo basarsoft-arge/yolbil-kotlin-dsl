@@ -1,9 +1,15 @@
 package com.example.yolbil_jetpack_sample_dsl
 
+import android.Manifest
 import android.annotation.SuppressLint
 import android.content.Context
+import android.os.Build
 import android.util.Log
 import android.widget.Button
+import android.widget.Toast
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import com.basarsoft.inavi.libs.sensormanager.SensorManager
 import com.basarsoft.yolbil.core.MapBounds
@@ -20,14 +26,18 @@ import com.basarsoft.yolbil.location.Location
 import com.basarsoft.yolbil.location.LocationListener
 import com.basarsoft.yolbil.projections.EPSG4326
 import com.basarsoft.yolbil.styles.CompiledStyleSet
-import com.basarsoft.yolbil.ui.MapEventListener
-import com.basarsoft.yolbil.ui.MapInteractionInfo
 import com.basarsoft.yolbil.ui.MapView
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import androidx.annotation.RequiresPermission
 import com.basarsoft.yolbil.utils.AssetUtils
 import com.basarsoft.yolbil.utils.ZippedAssetPackage
 import com.basarsoft.yolbil.vectortiles.MBVectorTileDecoder
+import com.basarsoft.yolbil.routing.NavigationResult
 import dagger.hilt.android.lifecycle.HiltViewModel
-import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Locale
 import javax.inject.Inject
 
 @HiltViewModel
@@ -59,6 +69,14 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
     private var bmsVectorLayer: VectorTileLayer? = null
     private var bmsVectorDataSource: YBOfflineStoredDataSource? = null
     private var bmsVectorDecoder: MBVectorTileDecoder? = null
+
+    var navigationInfo by mutableStateOf<NavigationInfo?>(null)
+        private set
+    init {
+        navigationUsage.navigationInfoListener = { info ->
+            navigationInfo = info
+        }
+    }
 
     @SuppressLint("MissingPermission")
     fun initializeMapView(mapView: MapView) {
@@ -119,26 +137,64 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
         navigationUsage.startNavigation()
     }
 
+    @RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
     fun createRoute() {
         val mv = mapView ?: run {
             Log.e("YolbilViewModel", "MapView not initialized")
+            return
+        }
+        if (!hasInternetConnection(mv.context)) {
+            mv.post {
+                Toast.makeText(
+                    mv.context,
+                    "İnternet olmadığı için rota çizilemedi.",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
             return
         }
         val start = startPos ?: return
         val end = endPos ?: return
         val gps = gpsLocationSource ?: return
 
-        navigationUsage.fullExample(
+        navigationInfo = null
+        val result = navigationUsage.fullExample(
             mapView = mv,
             start = start,
             end = end,
             isOffline = false,
             locationSource = gps
         )
+        when {
+            result == null -> {
+                val errorMessage = navigationUsage.lastRouteMessage
+                mv.post {
+                    Toast.makeText(
+                        mv.context,
+                        errorMessage ?: "Tercihlerinize göre varış noktasına erişilemez.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return
+            }
+            result.points.isEmpty -> {
+                val errorMessage = navigationUsage.lastRouteMessage
+                mv.post {
+                    Toast.makeText(
+                        mv.context,
+                        errorMessage ?: "Servis kaynaklı bir hata oluştu, rota oluşturulamadı.",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
+                return
+            }
+            else -> navigationInfo = result.toNavigationInfo()
+        }
     }
 
     fun stopNavigation() {
         navigationUsage.stopNavigation()
+        navigationInfo = null
     }
 
     // ------------------------------------------------------------
@@ -221,6 +277,74 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
     }
 }
 
+data class NavigationInfo(
+    val remainingTime: String,
+    val remainingDistance: String,
+    val eta: String
+) {
+    companion object {
+        fun fromRemaining(distanceMeters: Double?, timeSeconds: Double?): NavigationInfo? {
+            if (distanceMeters == null || timeSeconds == null) return null
+            val totalMinutes = kotlin.math.ceil(timeSeconds / 60.0).toInt()
+            val formattedTime = formatDuration(totalMinutes)
+            val formattedDistance = formatDistance(distanceMeters)
+            val eta = Calendar.getInstance().apply {
+                add(Calendar.MINUTE, totalMinutes)
+            }.let { cal ->
+                SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
+            }
+            return NavigationInfo(
+                remainingTime = formattedTime,
+                remainingDistance = formattedDistance,
+                eta = eta
+            )
+        }
+    }
+}
+
+fun NavigationResult.toNavigationInfo(): NavigationInfo {
+    val totalSeconds = totalTime
+    val totalMinutes = kotlin.math.ceil(totalSeconds / 60.0).toInt()
+    val distanceMeters = totalDistance
+
+    val formattedTime = formatDuration(totalMinutes)
+    val formattedDistance = formatDistance(distanceMeters)
+    val formattedEta = Calendar.getInstance().apply {
+        add(Calendar.MINUTE, totalMinutes)
+    }.let { cal ->
+        SimpleDateFormat("HH:mm", Locale.getDefault()).format(cal.time)
+    }
+
+    return NavigationInfo(
+        remainingTime = formattedTime,
+        remainingDistance = formattedDistance,
+        eta = formattedEta
+    )
+}
+
+private fun formatDuration(totalMinutes: Int): String {
+    return if (totalMinutes < 60) {
+        "$totalMinutes dk"
+    } else {
+        val hours = totalMinutes / 60
+        val minutes = totalMinutes % 60
+        if (minutes == 0) "$hours sa" else "$hours sa $minutes dk"
+    }
+}
+
+private fun formatDistance(distanceMeters: Double): String {
+    return if (distanceMeters < 1000) {
+        "${distanceMeters.toInt()} m"
+    } else {
+        val km = distanceMeters / 1000.0
+        if (km >= 100) {
+            String.format("%.0f km", km)
+        } else {
+            String.format("%.1f km", km)
+        }
+    }
+}
+
 
 private fun bringRouteLayersToTop(mv: MapView, lv: com.basarsoft.yolbil.layers.LayerVector?) {
     if (lv == null) return
@@ -229,5 +353,20 @@ private fun bringRouteLayersToTop(mv: MapView, lv: com.basarsoft.yolbil.layers.L
         val l = lv.get(i)
         mv.layers.remove(l)
         mv.layers.add(l) // en üste
+    }
+}
+
+@RequiresPermission(Manifest.permission.ACCESS_NETWORK_STATE)
+private fun hasInternetConnection(context: Context): Boolean {
+    val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as? ConnectivityManager
+        ?: return false
+    return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+        val network = connectivityManager.activeNetwork ?: return false
+        val capabilities = connectivityManager.getNetworkCapabilities(network) ?: return false
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
+            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+    } else {
+        @Suppress("DEPRECATION")
+        connectivityManager.activeNetworkInfo?.isConnected == true
     }
 }

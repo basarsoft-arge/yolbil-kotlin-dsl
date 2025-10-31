@@ -21,6 +21,7 @@ class YolbilNavigationUsage {
 
     private val TAG: String = "YolbilNavigationUsage"
 
+    var lastRouteMessage: String? = null
     private var mapView: MapView? = null
     private var snapLocationSourceProxy: LocationSourceSnapProxy? = null
     private var bundle: YolbilNavigationBundle? = null
@@ -31,6 +32,7 @@ class YolbilNavigationUsage {
 
     private var blueDotDataSource: BlueDotDataSource? = null
 
+    var navigationInfoListener: ((NavigationInfo) -> Unit)? = null
 
     @SuppressLint("MissingPermission")
     fun fullExample(
@@ -41,6 +43,7 @@ class YolbilNavigationUsage {
         locationSource: GPSLocationSource
     ): NavigationResult? {
 
+        lastRouteMessage = null
         this.mapView = mapView
 
         if (start != null) mapView.setFocusPos(start, 0f)
@@ -64,12 +67,22 @@ class YolbilNavigationUsage {
         val localBundle = bundle
         if (localBundle != null) {
             // >>> KRİTİK DÜZELTME: navigationResult ataması <<<
-            navigationResult = bundle!!.startNavigation(start,end).get(0);
+            val navVectorResult = runCatching { bundle!!.startNavigation(start, end) }
+            val navVector = navVectorResult.getOrNull()
+            lastRouteMessage = navVectorResult.exceptionOrNull()?.message
 
-            // navigationResult artık null değil
-            val navRes = navigationResult!!
+            if (navVector == null || navVector.isEmpty) {
+                if (lastRouteMessage == null) {
+                    lastRouteMessage = "Tercihlerinize göre varış noktasına erişilemez."
+                }
+                navigationResult = null
+                return null
+            }
+            navigationResult = navVector.get(0)
+            val navRes = navigationResult ?: return null
 
             snapLocationSourceProxy?.setRoutingPoints(navRes.points)
+            navigationInfoListener?.invoke(navRes.toNavigationInfo())
 
             for (i in 0 until navRes.instructions.size()) {
                 val rI = navRes.instructions[i.toInt()]
@@ -170,15 +183,44 @@ class YolbilNavigationUsage {
                 return super.onNavigationStarted()
             }
 
+            // Güncel komut geldiğinde kalan mesafeyi/süreyi UI'ya ilet
             override fun onCommandReady(command: NavigationCommand): Boolean {
                 Log.e(TAG, "onCommandReady: $command")
+                NavigationInfo.fromRemaining(
+                    command.totalDistanceToCommand,
+                    command.remainingTimeInSec
+                )?.let { info ->
+                    navigationInfoListener?.invoke(info)
+                }
                 return super.onCommandReady(command)
             }
 
+            // Rota yeniden hesaplandığında snap noktalarını ve kamera hizasını yenile
             override fun onNavigationRecalculated(navigationResult: NavigationResult): Boolean {
                 Log.e(TAG, "onNavigationRecalculated: $navigationResult")
-                mapView!!.isDeviceOrientationFocused = false
+                mapView?.isDeviceOrientationFocused = false
+                this@YolbilNavigationUsage.navigationResult = navigationResult
+                snapLocationSourceProxy?.setRoutingPoints(navigationResult.points)
+                mapView?.let { mv ->
+                    val width = mv.width.takeIf { it > 0 } ?: mv.measuredWidth.takeIf { it > 0 } ?: 1080
+                    val height = mv.height.takeIf { it > 0 } ?: mv.measuredHeight.takeIf { it > 0 } ?: 540
+                    snapLocationSourceProxy?.setmoveToHeadingDistance(40.0, width, height)
+                }
+                navigationInfoListener?.invoke(navigationResult.toNavigationInfo())
                 return super.onNavigationRecalculated(navigationResult)
+            }
+
+            // Konum güncellemelerinde kalan bilgileri taze tut
+            override fun onLocationChanged(command: NavigationCommand?): Boolean {
+                if (command != null) {
+                    NavigationInfo.fromRemaining(
+                        command.totalDistanceToCommand,
+                        command.remainingTimeInSec
+                    )?.let { info ->
+                        navigationInfoListener?.invoke(info)
+                    }
+                }
+                return super.onLocationChanged(command)
             }
         })
 
