@@ -81,6 +81,12 @@ class YolbilNavigationUsage {
             navigationResult = navVector.get(0)
             val navRes = navigationResult ?: return null
 
+            if(navigationResult != null){ // NavigationResult üzerinden getPointsGeoJSON
+            //    getPointsEncodedPolyline ve getPointsLineString erişimi sağlanıyor.
+                navigationResult!!.getPointsGeoJSON()
+                navigationResult!!.getPointsEncodedPolyline()
+                navigationResult!!.getPointsLineString()
+             }
             snapLocationSourceProxy?.setRoutingPoints(navRes.points)
             navigationInfoListener?.invoke(navRes.toNavigationInfo())
 

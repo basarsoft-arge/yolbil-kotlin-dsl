@@ -81,7 +81,10 @@ class YolbilViewModel @Inject constructor() : ViewModel() {
     @SuppressLint("MissingPermission")
     fun initializeMapView(mapView: MapView) {
         this.mapView = mapView
+        // --- MapView render açıp kapatılan state
+        // True render modunu devre dışı bırakır false render modunu devreye alır
 
+        mapView.isRenderDisabled=true
         // Başlangıç/varış örnekleri
         startPos = MapPos(32.8597, 39.9334) // Kızılay
         endPos   = MapPos(32.8547, 39.9250) // Anıtkabir
