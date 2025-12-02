@@ -96,11 +96,18 @@ class YolbilNavigationUsage {
                 Log.e("Instruction", rI.action.toString())
                 // rI.geometryTag.getObjectElement("commands").getArrayElement(0) // gerekiyorsa
             }
+            try {
+                mapView.fitRouteOnMap(navRes.points)
+
+            }catch (e: Exception){
+                Log.e(TAG, "Navigation bundle is null")
+                return null
+            }
+
 
             // start null ise mock gönderme
             start?.let { locationSource.sendMockLocation(it) }
 
-            mapView.fitRouteOnMap(navRes.points)
             try {
                 val size = navRes.points.size()
                 Log.d("NAVIGATION_POINTS", "Toplam Nokta: $size")
@@ -172,10 +179,21 @@ class YolbilNavigationUsage {
         val accountId = "acc_id"   // senin değerlerin
         val appCode = "app_code"     // senin değerlerin
 
+
+        val baseUrlApiKey = "https://serviceswin.basarsoft.com.tr"//Api key ile kullanılacak Url
+        val apikey = "api_key"//Api key
+
+      // val navigationBundleBuilder = YolbilNavigationBundleBuilder(
+      //     baseUrl,
+      //     accountId,
+      //     appCode,
+      //     // Mümkünse snap’li kaynak, yoksa GPS
+      //     snapLocationSourceProxy!!.getBlueDotDataSource().getLocationSource()
+      // )
+
         val navigationBundleBuilder = YolbilNavigationBundleBuilder(
-            baseUrl,
-            accountId,
-            appCode,
+            baseUrlApiKey,
+            apikey,
             // Mümkünse snap’li kaynak, yoksa GPS
             snapLocationSourceProxy!!.getBlueDotDataSource().getLocationSource()
         )
