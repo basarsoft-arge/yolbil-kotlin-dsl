@@ -46,7 +46,13 @@ class YolbilNavigationUsage {
         lastRouteMessage = null
         this.mapView = mapView
 
-        if (start != null) mapView.setFocusPos(start, 0f)
+        if (start == null || end == null) {
+            lastRouteMessage = "Başlangıç veya varış noktası eksik."
+            Log.e(TAG, "fullExample: start or end is null")
+            return null
+        }
+
+        mapView.setFocusPos(start, 0f)
 
         this.locationSource = locationSource
         locationSource.addListener(object : LocationListener() {
@@ -62,12 +68,16 @@ class YolbilNavigationUsage {
 
         addLocationSourceToMap(mapView)
         bundle = getNavigationBundle(isOffline)
+        if (bundle == null) {
+            lastRouteMessage = lastRouteMessage ?: "Navigasyon paketi oluşturulamadı."
+            Log.e(TAG, "fullExample: getNavigationBundle returned null")
+            return null
+        }
         addNavigationToMapLayers(mapView)
 
         val localBundle = bundle
         if (localBundle != null) {
-            // >>> KRİTİK DÜZELTME: navigationResult ataması <<<
-            val navVectorResult = runCatching { bundle!!.startNavigation(start, end) }
+            val navVectorResult = runCatching { localBundle.startNavigation(start, end) }
             val navVector = navVectorResult.getOrNull()
             lastRouteMessage = navVectorResult.exceptionOrNull()?.message
 
@@ -96,11 +106,20 @@ class YolbilNavigationUsage {
                 Log.e("Instruction", rI.action.toString())
                 // rI.geometryTag.getObjectElement("commands").getArrayElement(0) // gerekiyorsa
             }
+
+
+            val pointCount = navRes.points.size().toInt()
+            if (pointCount == 0) {
+                lastRouteMessage = "Rota noktası boş döndü."
+                Log.e(TAG, "Navigation points empty; skipping fitRouteOnMap/beginNavigation.")
+                return null
+            }
             try {
                 mapView.fitRouteOnMap(navRes.points)
 
             }catch (e: Exception){
-                Log.e(TAG, "Navigation bundle is null")
+                lastRouteMessage = e.message
+                Log.e(TAG, "fitRouteOnMap failed: ${e.message}")
                 return null
             }
 
@@ -166,15 +185,17 @@ class YolbilNavigationUsage {
 
     fun stopNavigation() {
         mapView?.let { mv ->
-            blueDotVectorLayer?.let { mv.layers.remove(it) }
-            bundle?.let { mv.layers.removeAll(it.layers) }
+            runCatching { blueDotVectorLayer?.let { mv.layers.remove(it) } }
+                .onFailure { Log.e(TAG, "BlueDot layer remove failed: ${it.message}") }
+            runCatching { bundle?.let { mv.layers.removeAll(it.layers) } }
+                .onFailure { Log.e(TAG, "Route layers remove failed: ${it.message}") }
         }
         bundle?.stopNavigation()
         blueDotVectorLayer = null
         navigationResult = null
     }
 
-    fun getNavigationBundle(isOffline: Boolean): YolbilNavigationBundle {
+    fun getNavigationBundle(isOffline: Boolean): YolbilNavigationBundle? {
         val baseUrl = "bms.basarsoft.com.tr"
         val accountId = "acc_id"   // senin değerlerin
         val appCode = "app_code"     // senin değerlerin
@@ -191,11 +212,18 @@ class YolbilNavigationUsage {
       //     snapLocationSourceProxy!!.getBlueDotDataSource().getLocationSource()
       // )
 
+        val snapSource = snapLocationSourceProxy?.getBlueDotDataSource()?.getLocationSource()
+        if (snapSource == null) {
+            lastRouteMessage = "Konum kaynağı oluşturulamadı."
+            Log.e(TAG, "getNavigationBundle: snapSource is null")
+            return null
+        }
+
         val navigationBundleBuilder = YolbilNavigationBundleBuilder(
             baseUrlApiKey,
             apikey,
             // Mümkünse snap’li kaynak, yoksa GPS
-            snapLocationSourceProxy!!.getBlueDotDataSource().getLocationSource()
+            snapSource
         )
 
         navigationBundleBuilder.setBlueDotDataSourceEnabled(true)
@@ -248,7 +276,12 @@ class YolbilNavigationUsage {
             }
         })
 
-        return navigationBundleBuilder.build()
+        return runCatching { navigationBundleBuilder.build() }
+            .onFailure { e ->
+                lastRouteMessage = e.message
+                Log.e(TAG, "getNavigationBundle build failed: ${e.message}")
+            }
+            .getOrNull()
     }
 
 
@@ -266,8 +299,18 @@ class YolbilNavigationUsage {
             Log.e(TAG, "navigationResult is null; call fullExample() first")
             return
         }
+        if (nav.points.size().toInt() == 0) {
+            lastRouteMessage = "Rota noktası boş, navigasyon başlatılmadı."
+            Log.e(TAG, "startNavigation: nav.points empty")
+            return
+        }
 
-        bundle?.beginNavigation(nav)
+        val beginResult = runCatching { bundle?.beginNavigation(nav) }
+        if (beginResult.isFailure) {
+            lastRouteMessage = beginResult.exceptionOrNull()?.message
+            Log.e(TAG, "beginNavigation failed: ${beginResult.exceptionOrNull()?.message}")
+            return
+        }
         mv.setDeviceOrientationFocused(false)
         lastLocation?.coordinate?.let { mv.setFocusPos(it, 1.0f) }
         mv.setZoom(17f, 1.0f)
