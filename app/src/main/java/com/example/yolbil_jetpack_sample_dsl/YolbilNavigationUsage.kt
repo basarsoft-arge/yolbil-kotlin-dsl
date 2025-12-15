@@ -201,7 +201,7 @@ class YolbilNavigationUsage {
         val appCode = "app_code"     // senin değerlerin
 
 
-        val baseUrlApiKey = "https://serviceswin.basarsoft.com.tr"//Api key ile kullanılacak Url
+        val baseUrlApiKey = "https://rts57.basarsoft.com.tr"//Api key ile kullanılacak Url
         val apikey = "api_key"//Api key
 
       // val navigationBundleBuilder = YolbilNavigationBundleBuilder(
