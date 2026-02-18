@@ -3,6 +3,7 @@ package com.example.yolbil_jetpack_sample_dsl
 import android.annotation.SuppressLint
 import android.util.Log
 import com.basarsoft.yolbil.core.MapPos
+import com.basarsoft.yolbil.core.MapPosVector
 import com.basarsoft.yolbil.datasources.BlueDotDataSource
 import com.basarsoft.yolbil.layers.VectorLayer
 import com.basarsoft.yolbil.location.GPSLocationSource
@@ -204,7 +205,13 @@ class YolbilNavigationUsage {
         val baseUrlApiKey = "https://rts57.basarsoft.com.tr"//Api key ile kullanılacak Url
         val apikey = "api_key"//Api key
 
-      // val navigationBundleBuilder = YolbilNavigationBundleBuilder(
+        val wayPoints = MapPosVector().apply {//Örnek Ara durak listesi Sdk tarafına mapposvector olarak iletiliyor
+            add(MapPos(32.741823531713614, 39.90671158778516))
+            add(MapPos(32.81037530414685, 39.86077844227512))
+        }
+
+
+        // val navigationBundleBuilder = YolbilNavigationBundleBuilder(
       //     baseUrl,
       //     accountId,
       //     appCode,
@@ -227,6 +234,8 @@ class YolbilNavigationUsage {
         )
 
         navigationBundleBuilder.setBlueDotDataSourceEnabled(true)
+        navigationBundleBuilder.setWayPoints(wayPoints)//Aradurak listesi Sdk setlendiği yer
+        navigationBundleBuilder.setWayPointsPassedThresholdMeters(100.0)// varsayilan: 100m // Verilen mesafe icinde ilgili aradurak yaklaşıldıysa  gecilen ara duragi sdk tarafında listeden siler recalculate durumunda tekrar istek atmaz
         navigationBundleBuilder.setOfflineEnabled(isOffline)
         navigationBundleBuilder.setOfflineDataPath("/storage/emulated/0/yolbilxdata/TR.vtiles")
         navigationBundleBuilder.setCommandListener(object : CommandListener() {
@@ -265,6 +274,38 @@ class YolbilNavigationUsage {
             // Konum güncellemelerinde kalan bilgileri taze tut
             override fun onLocationChanged(command: NavigationCommand?): Boolean {
                 if (command != null) {
+                    /*
+                                       *
+                     * Kullanılan API'ler:
+                     * - getWaypointCount(): Toplam ara durak sayısı
+                     * - getNextWaypointIndex(): Sıradaki ara durak index'i (0-based, yoksa -1)
+                     * - getDistanceToNextWaypoint(): Sıradaki ara durağa kalan mesafe (metre)
+                     * - getRemainingTimeToNextWaypointInSec(): Sıradaki ara durağa kalan süre (saniye)
+                     * - getDistanceToWaypointIndex(i): istenilen ara durağa kalan mesafe (metre) index ile
+                     * - getRemainingTimeToWaypointIndexInSec(i): istenilen ara durağa kalan süre (saniye) index ile
+                     */
+                    val waypointCount = command.waypointCount
+                    val nextWaypointIndex = command.nextWaypointIndex
+                    val distanceToNextWaypoint = command.distanceToNextWaypoint
+                    val remainingTimeToNextWaypointInSec = command.remainingTimeToNextWaypointInSec
+
+                    val waypointRawLog = buildString {
+                        append("WAYPOINT_RAW | ")
+                        append("count=").append(waypointCount).append(" | ")
+                        append("nextIndex=").append(nextWaypointIndex).append(" | ")
+                        append("nextDistance=").append(distanceToNextWaypoint).append(" | ")
+                        append("nextTimeSec=").append(remainingTimeToNextWaypointInSec)
+
+                        // Tüm ara durakları index bazlı ham şekilde eklendi ondan dolayı döngü ile gösterildi
+                        for (i in 0 until waypointCount) {
+                            append(" || ")
+                            append("wp[").append(i).append("]")
+                            append(":distance=").append(command.getDistanceToWaypointIndex(i))
+                            append(",timeSec=").append(command.getRemainingTimeToWaypointIndexInSec(i))
+                        }
+                    }
+                    Log.d(TAG, waypointRawLog)
+
                     NavigationInfo.fromRemaining(
                         command.totalDistanceToCommand,
                         command.remainingTimeInSec
