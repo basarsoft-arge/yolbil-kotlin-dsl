@@ -312,6 +312,17 @@ class YolbilNavigationUsage {
                     )?.let { info ->
                         navigationInfoListener?.invoke(info)
                     }
+
+                    bundle!!.incompletedPointsGeoJSON //rotada ilerledikten sonra kalan yol
+                    bundle!!.incompletedPointsLineString//rotada ilerledikten sonra kalan yol
+                    bundle!!.incompletedPointsEncodedPolyline//rotada ilerledikten sonra kalan yol
+
+
+
+                    bundle!!.completedPointsGeoJSON //rotada tamamlanan yol ihtiyaç halinde kullanmak için eklendi
+                    bundle!!.completedPointsLineString//rotada tamamlanan yol ihtiyaç halinde kullanmak için eklendi
+                    bundle!!.completedPointsEncodedPolyline//rotada tamamlanan yol ihtiyaç halinde kullanmak için eklendi
+
                 }
                 return super.onLocationChanged(command)
             }
