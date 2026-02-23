@@ -260,6 +260,14 @@ class YolbilNavigationUsage {
             override fun onNavigationRecalculated(navigationResult: NavigationResult): Boolean {
                 Log.e(TAG, "onNavigationRecalculated: $navigationResult")
                 mapView?.isDeviceOrientationFocused = false
+
+                if(navigationResult != null){ // NavigationResult üzerinden getPointsGeoJSON //Recalculate senaryosunda tekrar tetiklenmesi için
+                    //    getPointsEncodedPolyline ve getPointsLineString erişimi sağlanıyor.
+                    navigationResult!!.getPointsGeoJSON()
+                    navigationResult!!.getPointsEncodedPolyline()
+                    navigationResult!!.getPointsLineString()
+                }
+
                 this@YolbilNavigationUsage.navigationResult = navigationResult
                 snapLocationSourceProxy?.setRoutingPoints(navigationResult.points)
                 mapView?.let { mv ->
